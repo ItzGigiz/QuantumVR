@@ -7,48 +7,62 @@ public class BlochSphereController : MonoBehaviour
     public Transform vettoreStato;      // Assegna il GameObject VettoreDiStato
     public TextMeshProUGUI txtDisplay; // Display di testo sulla console
 
-    // Angolo theta attuale (0 = |0>, 180 = |1>)
-    private float currentTheta = 0f;
+    private Quaternion targetRotation = Quaternion.identity;
+    private bool inSovrapposizione = false;
 
     void Start()
     {
-        UpdateVisualState();
+        ResetState();
     }
 
-    // Porta X (NOT): inverte lo stato tra |0> e |1>
+    // Porta X (NOT): ruota sempre lo stato ATTUALE di 180° attorno all'asse X
     public void ApplyGateX()
     {
-        currentTheta = (currentTheta == 0f) ? 180f : 0f;
+        targetRotation = Quaternion.Euler(180f, 0f, 0f) * targetRotation;
         UpdateVisualState();
     }
 
-    // Porta H (Hadamard): porta il vettore in sovrapposizione sull'equatore (90°)
+    // Porta H (Hadamard): porta il vettore sull'equatore (in avanti o di lato così si vede bene)
     public void ApplyGateH()
     {
-        currentTheta = 90f;
+        if (!inSovrapposizione)
+        {
+            // Se era su |0> (in alto) va in avanti (-90° su X) o verso destra (-90° su Z).
+            // Usiamo -90° su X così punta verso l'utente ed è ben visibile!
+            float dir = (Vector3.Dot(targetRotation * Vector3.up, Vector3.up) > 0) ? -90f : 90f;
+            targetRotation = Quaternion.Euler(dir, 0f, 0f);
+            inSovrapposizione = true;
+        }
+        else
+        {
+            // Applicare H due volte riporta allo stato puro iniziale
+            ResetState();
+        }
         UpdateVisualState();
     }
 
     // Reset: riporta al Polo Nord |0>
     public void ResetState()
     {
-        currentTheta = 0f;
+        targetRotation = Quaternion.identity;
+        inSovrapposizione = false;
+        if (txtDisplay != null) txtDisplay.text = "Stato: |0>";
         UpdateVisualState();
     }
 
     // Misura: aziona il collasso probabilistico
     public void MeasureState()
     {
-        if (currentTheta == 90f) // Se è in sovrapposizione
+        if (inSovrapposizione)
         {
-            // 50% di probabilità di collassare a 0 o 1
-            int result = Random.Range(0, 2); 
-            currentTheta = (result == 0) ? 0f : 180f;
+            int result = Random.Range(0, 2);
+            targetRotation = (result == 0) ? Quaternion.identity : Quaternion.Euler(180f, 0f, 0f);
+            inSovrapposizione = false;
             if (txtDisplay != null) txtDisplay.text = "Risultato Misurato: |" + result + ">";
         }
         else
         {
-            int state = (currentTheta == 0f) ? 0 : 1;
+            int state = (Vector3.Dot(targetRotation * Vector3.up, Vector3.up) > 0) ? 0 : 1;
             if (txtDisplay != null) txtDisplay.text = "Stato Determinato: |" + state + ">";
         }
         UpdateVisualState();
@@ -56,10 +70,9 @@ public class BlochSphereController : MonoBehaviour
 
     private void UpdateVisualState()
     {
-        // Ruota la freccia attorno all'asse X per riflettere l'angolo theta
         if (vettoreStato != null)
         {
-            vettoreStato.localRotation = Quaternion.Euler(currentTheta, 0f, 0f);
+            vettoreStato.localRotation = targetRotation;
         }
     }
 }
